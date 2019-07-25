@@ -1,6 +1,6 @@
 I carried out this project in the late 90s.
 
-This is the firmware of an 8x8 channel audio and video matrix.
+This is the firmware of an 8x8 channel audio and video matrix manufactured by the company.
 
 It has a control panel to be manipulated directly from the device and an application to be controlled from a Windows PC.
 
