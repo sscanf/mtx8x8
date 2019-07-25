@@ -1,0 +1,50 @@
+--------------------Configuration: mtx8x8 - Win32 Release--------------------
+Begining build with project "D:\Program\Projects\mtx8x8\mtx8x8\mtx8x8.dsp", at root.
+Active configuration is Win32 (x86) Application (based on Win32 (x86) Application)
+
+Project's tools are:
+			"32-bit C/C++ Compiler for 80x86" with flags "/nologo /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /Fp"Release/mtx8x8.pch" /Yu"stdafx.h" /Fo"Release/" /Fd"Release/" /FD /c "
+			"OLE Type Library Maker" with flags "/nologo /D "NDEBUG" /mktyplib203 /o NUL /win32 "
+			"Win32 Resource Compiler" with flags "/l 0xc0a /fo"Release/mtx8x8.res" /d "NDEBUG" "
+			"Browser Database Maker" with flags "/nologo /o"Release/mtx8x8.bsc" "
+			"COFF Linker for 80x86" with flags "/nologo /subsystem:windows /incremental:no /pdb:"Release/mtx8x8.pdb" /machine:I386 /out:"Release/mtx8x8.exe" "
+			"Custom Build" with flags ""
+			"<Component 0xa>" with flags ""
+
+Creating command line "rc.exe /l 0xc0a /fo"Release/mtx8x8.res" /d "NDEBUG" "D:\Program\Projects\mtx8x8\mtx8x8\mtx8x8.rc"" 
+Creating temp file "C:\TEMP\RSP4C.tmp" with contents </nologo /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /Fp"Release/mtx8x8.pch" /Yu"stdafx.h" /Fo"Release/" /Fd"Release/" /FD /c 
+"D:\Program\Projects\mtx8x8\mtx8x8\Comm.cpp"
+"D:\Program\Projects\mtx8x8\mtx8x8\MainFrm.cpp"
+"D:\Program\Projects\mtx8x8\mtx8x8\mtx8x8.cpp"
+"D:\Program\Projects\mtx8x8\mtx8x8\mtx8x8Doc.cpp"
+"D:\Program\Projects\mtx8x8\mtx8x8\mtx8x8View.cpp"
+>
+Creating command line "cl.exe @C:\TEMP\RSP4C.tmp" 
+Creating temp file "C:\TEMP\RSP4D.tmp" with contents </nologo /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /Fp"Release/mtx8x8.pch" /Yc"stdafx.h" /Fo"Release/" /Fd"Release/" /FD /c 
+"D:\Program\Projects\mtx8x8\mtx8x8\StdAfx.cpp"
+>
+Creating command line "cl.exe @C:\TEMP\RSP4D.tmp" 
+Creating temp file "C:\TEMP\RSP4E.tmp" with contents </nologo /subsystem:windows /incremental:no /pdb:"Release/mtx8x8.pdb" /machine:I386 /out:"Release/mtx8x8.exe" 
+.\Release\Comm.obj
+.\Release\MainFrm.obj
+.\Release\mtx8x8.obj
+.\Release\mtx8x8Doc.obj
+.\Release\mtx8x8View.obj
+.\Release\StdAfx.obj
+.\Release\mtx8x8.res>
+Creating command line "link.exe @C:\TEMP\RSP4E.tmp" 
+Compiling resources...
+Compiling...
+StdAfx.cpp
+Compiling...
+Comm.cpp
+MainFrm.cpp
+mtx8x8.cpp
+mtx8x8Doc.cpp
+mtx8x8View.cpp
+Generating Code...
+Linking...
+
+
+
+mtx8x8.exe - 0 error(s), 0 warning(s)

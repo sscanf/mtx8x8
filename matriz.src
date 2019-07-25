@@ -1,0 +1,603 @@
+;******************************************************************************
+;*                                                                            
+;* NOMBRE       : MATRIZ 8x8
+;* DESCRIPCION  : Conmutador de audio
+;* LENGUAJE     : Ensamblador motorola C8
+;* FECHA INICIO : 20/3/97
+;* FECHA FINAL  :
+;*
+;*
+;* Por la actuación de cualquier pulsador "entradas", el sistema queda hábil
+;* durante 10 segundos esperando siguientes pulsaciones del grupo de "salidas"
+;* (led parpadeando). Ese estado y durante ese tiempo queda fijo para aceptar
+;* todas las pulsaciones de "salidas" que se desee. Dicho estado termina cuando
+;* se detecta una nueva pulsación en el grupo de "entradas" (leds quedan fijos)
+;* también pasados 10 segundos.
+;*
+;******************************************************************************
+;
+; DEFINICION DE LOS PORTS
+PORTA   EQU 00H
+PORTB   EQU 01H
+PORTC   EQU 02H
+PORTD   EQU 03H
+PCA     EQU 04H
+PCB     EQU 05H
+PCC     EQU 06H
+PCD     EQU 07H
+MR      EQU 0AH                 ;MISCELLANEOUS REGISTER
+
+
+
+;============================= SEGMENTO DE RAM ============================
+SCDAT	equ 11h       ; Serial Comunications Data Register
+SCCR1   equ 0eh       ; Serial Comunication Register 1
+SCCR2   equ 0fh       ; Serial Comunication Register 2
+SCSR    equ 10h       ; Serial comunication Status Register
+TCR     equ 12h       ; Timer Control Register
+TSR     equ 13h       ; Timer Status Register
+SPCR    equ 0ah       ; spcr (serial peripheral control register)
+SPSR    equ 0bh       ; Serial Peripheral Status Register
+SPDR    equ 0ch       ; Serial Peripheral Data I/O Register
+TCRH    equ 0018h     ;timer count register (high)
+TCRL    equ 0019h     ;timer count register (low)
+BAUD    equ 0000dh    ; Baud Rate Register
+ENTRY	equ 100h
+
+P_ENTRADAS	equ 0
+P_SALIDAS	equ 1
+STB_REGISTRO	equ 2
+STB_MATRIZ	equ 1
+WATCH_DOG	equ 3
+
+B600  equ 34h		;CALCULADO PARA CRISTAL DE 4.0 Mhz
+B1200 equ 33h           
+B2400 equ 32h
+B4800 equ 31h
+B9600 equ 30h
+
+                        ORG 50H
+
+BuffSerie	res 3
+PuntSer		res 1
+BuffEntradas	res 8
+PalEntradas	res 1
+PalSalidas	res 1
+CntTimer	res 1
+segundos	res 1
+FlashEntradas	res 1
+FlashSalidas	res 1
+sava		res 1
+sava2		res 1
+savx		res 1
+savx2		res 1
+TempCnx		res 1
+temp		res 1
+flag		res 1
+EntActual	res 1
+
+;==============================================================================
+
+
+                           ORG ENTRY    ;COMIENZA EL PROGRAMA
+
+
+;------------------------- PROGRAMACION DE LOS PORTS --------------------------
+
+
+        SEI
+
+        clra
+        sta PCA
+
+        lda #$0f
+        sta PCB
+
+        lda #$ff
+        sta PCC
+
+;------------------------------------------------------------------------------
+
+; - - - - - - - - - - - Borra la memoria con 00 - - - - - - - - - - - - - - -
+        lda #$0
+        ldx #$50
+clrmem:
+        sta $0,x
+        incx
+        cpx #$ff
+        bne clrmem      ;Llena la memoria de 00
+
+;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+	clr PORTB
+        jsr IniSpi      ;INICIALIZA EL MODO SPI
+	jsr SciOn	;Activa modo sci
+
+        lda #$2
+        sta CntTimer
+	bset 5,TCR
+        jsr pretim      ;Pone en marcha el timer
+	cli
+
+inicio:
+	bset STB_MATRIZ,PORTC
+
+	lda #$ff
+	sta PalEntradas
+	sta PalSalidas
+	jsr EnciendeEntradas
+
+	clr segundos
+TimRes:
+	lda segundos
+	cmp #$5
+	bne TimRes
+	
+
+	clr PalSalidas
+	clr FlashEntradas
+	clr PalEntradas
+	jsr EnciendeSalidas
+	jsr ProgramaMatriz
+
+main:
+	brset 5,SCSR,HayDatoSerie  ;ESPERA QUE ENTREN UN CARACTER
+	jsr PulsanEntradas
+	tsta
+	bne HayEntradas		;Han pulsado algún pulsador.
+	bra main
+
+
+HayDatoSerie:
+
+	jsr SciIn
+	cmp #$ec
+	bne main
+	jsr SciIn
+	cmp #$a1
+	bne main
+	jsr SciIn	;Espera primer byte
+	sta BuffSerie
+	brclr 7,BuffSerie,lectura
+	
+	jsr SciIn	;Espera el segundo byte
+	sta BuffSerie+1
+
+	lda BuffSerie
+	and #$7f
+	beq main
+	cmp #$9
+	bpl main
+	deca
+	
+	tax
+	lda BuffSerie+1
+	sta BuffEntradas,x
+	jsr ProgramaMatriz
+	jsr PrepEntradas
+	jsr EnciendeSalidas
+	bra main
+
+Lectura:
+	lda #$ec
+	jsr SciOut
+	lda #$a1
+	jsr SciOut
+	ldx BuffSerie
+	decx
+	lda BuffEntradas,x
+	jsr SciOut
+	bra main
+
+
+HayEntradas:
+	sta EntActual
+	dec EntActual
+	tax
+	decx
+	lda tabla,x
+	sta FlashEntradas
+	ora PalEntradas
+	sta PalEntradas
+
+	jsr PrepSalidas	
+	ldx EntActual
+	eor BuffEntradas,x
+	sta PalSalidas
+
+	clr BuffEntradas,x	;Las salidas asociadas a esa entrada se borran
+	jsr EnciendeEntradas
+	jsr ProgramaMatriz
+	jsr bucle
+
+pTiempo:
+	clr segundos
+pSalidas:
+
+	lda segundos
+	cmp #40
+	beq FinTiempo		;Han pasado 40 segundos
+	
+	jsr PulsanEntradas
+	tsta
+	bne FinTiempo
+
+	jsr PulsanSalidas
+	tsta
+	beq pSalidas
+
+	tax
+	decx
+	lda tabla,x
+
+	ora FlashSalidas
+	sta FlashSalidas
+
+	ldx EntActual
+	ora BuffEntradas,x
+	sta BuffEntradas,x
+	jsr EnciendeSalidas
+	jsr ProgramaMatriz
+
+	lda FlashEntradas
+	ora PalEntradas
+	sta PalEntradas
+	bra pTiempo
+
+FinTiempo:
+	lda FlashEntradas
+	ora PalEntradas
+	sta PalEntradas
+	lda FlashSalidas
+	bne CntTmp
+	lda FlashEntradas
+	eor PalEntradas
+	sta PalEntradas
+	bra CntTmp1
+	
+CntTmp	lda FlashEntradas
+	ora PalEntradas
+	sta PalEntradas
+CntTmp1	clr FlashEntradas
+	clr FlashSalidas
+	jsr EnciendeSalidas
+	jsr ProgramaMatriz
+	jmp main
+;---------------------------- SUBRUTINAS --------------------------------------
+
+bucle:
+	ldx #$ff
+buc	lda #$ff
+buc2	deca
+	bne buc2
+	decx
+	bne buc
+	rts
+
+PrepSalidas:
+	clrx
+	clr PalSalidas
+Enciende:
+	lda BuffEntradas,x
+	ora PalSalidas
+	sta PalSalidas
+	incx
+	cpx #$8
+	bne Enciende
+	rts
+
+
+PrepEntradas:
+	clrx
+	clr PalEntradas
+PrpEnt:
+	lda BuffEntradas,x
+	beq NoPrp
+	lda tabla,x
+	ora PalEntradas
+	sta PalEntradas
+NoPrp:
+	incx
+	cpx #$8
+	bne PrpEnt
+	rts
+
+
+EnciendeSalidas:
+
+	jsr PrepSalidas
+
+	lda PalSalidas
+	jsr SpiOut
+	lda PalEntradas
+	jsr SpiOut
+	bset STB_REGISTRO,PORTB
+	bclr STB_REGISTRO,PORTB
+	rts
+
+EnciendeEntradas:
+
+	lda PalSalidas
+	jsr SpiOut
+	lda PalEntradas
+	jsr SpiOut
+	bset STB_REGISTRO,PORTB
+	bclr STB_REGISTRO,PORTB
+	rts
+
+ProgramaMatriz:
+
+	clrx
+	clra
+mat1:
+	lda BuffEntradas,x
+	sta sava
+	stx savx
+	clrx
+	clc
+mat2:
+	rora
+	jsr conex
+	incx
+	cpx #$8
+	bne mat2
+	ldx savx
+	lda sava
+	incx
+	cpx #$8
+	bne mat1
+	rts
+
+conex:
+	stx savx2
+	sta sava2
+
+	clra
+	bcc NoConx
+conecta	ora #$01
+NoConx:
+	sta temp
+	ldx savx
+	stx TempCnx
+	lsl TempCnx
+	lsl TempCnx
+	lda savx2
+	lsla
+	lsla
+	lsla
+	lsla
+	lsla
+	ora TempCnx
+	sta TempCnx
+	ora temp
+	sta PORTC
+	bclr STB_MATRIZ,PORTC
+	bset STB_MATRIZ,PORTC
+	lda sava2
+	ldx savx2
+	rts
+PulsanEntradas:
+
+	bset P_ENTRADAS,PORTB
+	lda PORTA
+	clrx
+	clc
+shf:
+	rora
+	bcs Bita1
+	incx
+	cpx #$8
+	bne shf
+	clra
+	bclr P_ENTRADAS,PORTB
+	rts
+Bita1:
+	bclr P_ENTRADAS,PORTB
+	incx
+	txa
+	rts
+	
+PulsanSalidas:
+	
+	bset P_SALIDAS,PORTB
+	lda PORTA
+	clrx
+	clc
+shf1:
+	rora
+	bcs Bita1s
+	incx
+	cpx #$8
+	bne shf1
+	clra
+	bclr P_SALIDAS,PORTB
+	rts
+Bita1s:
+	bclr P_SALIDAS,PORTB
+	incx
+	txa
+	rts
+
+;-------------- TRANSMITE AL PC EL CONTENIDO DEL REGISTRO A ------------------
+
+SCIOUT:
+        BRCLR 7,SCSR,SCIOUT        ;MIRA SI ESTA OCUPADO
+        STA SCDAT
+ESPERA:
+        BRCLR 6,SCSR,ESPERA     ;ESPERA PARA ACABAR DE TRANSMITIR
+        RTS
+
+;-----------------------------------------------------------------------------
+
+SCIIN:
+        BRCLR 5,SCSR,SCIIN           ;ESPERA QUE ENTREN UN CARACTER
+        LDA SCDAT                    ;EN A ESTA EL CARACTER ENTRADO
+        RTS
+
+; - - - - - - - TRANSMITE AL SPI EL CONTENIDO DE A - - - - - - - - - - - - - -
+SPIOUT:
+        STA SPDR
+
+EEW4    BRCLR 7,SPSR,EEW4       ;ESPERA QUE TRANSMITA EL BYTE
+        RTS
+;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+;  - - - - - - LEE UN BITE DEL SPI Y LO PONE EN A - - - - - - - - - - - - - -
+spiIN:
+
+        CLRA                    TRANSMITE 00 PARA QUE GENERE EL CLOCK
+        JSR SPIOUT              ;Y ASI PERMITIR AL DEVICE QUE TRANSMITA EL BYTE.
+        LDA SPDR                ;LEE EL BYTE RECIBIDO.
+        RTS
+;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+;----------------- CONFIGURACION INTERFACE DE COMUNICACIONES ------------------
+SCION:
+        LDA #$00
+        STA SCCR1
+
+        LDA #$0C        ;- TDRE interrupt disabled
+                        ;- TC interrupt disabled
+                        ;- SCI interrupt disabled
+                        ;- IDLE interrupt disbaled
+                        ;- After the last byte is transmitted, the TDO line
+                        ;  becomes a hight-impedance line.
+                        ;- Receiver disabled and RDRF, IDLE, OR, NF and FE
+                        ;  status bits are inhibited.
+        STA SCCR2
+
+;        lda PORTB
+;	and #$c0
+;	lsra
+;	lsra
+;	lsra
+;	lsra
+;	lsra
+;	lsra
+;	tax
+;	lda TablaBaud,x	
+	lda #$30
+        STA BAUD
+        RTS
+;------------------------------------------------------------------------------
+
+;******************* DESACTIVA EL MODO SCI *******************************
+SCIOFF:        
+        LDA #$00
+        STA SCCR1       ;one start bit, eight data bits, one stop bit
+
+        LDA #$00        ;- TDRE interrupt disabled
+                        ;- TC interrupt disabled
+                        ;- SCI interrupt enabled
+                        ;- IDLE interrupt disbaled
+                        ;- Transmiter enabled
+                        ;- Receiver enabled
+                        ;  status bits are inhibited.
+        STA SCCR2
+        RTS                     
+
+;-----------------------------------------------------------------------------
+
+pretim:
+
+        lda #$ff
+        sta tcrH
+        lda #$ff
+        sta tcrL
+        rts
+
+;----------------------------------- INICIALIZACION SPI ----------------------------------------
+
+;***************************** IMPORTANTE *************************************
+;                                                      __
+;PARA QUE EL MICRO ACEPTE SER MASTER SE HA DE PONER EL SS A POSITIVO (PATA 37),
+; SI NO ES ASI EL MICRO RECHAZA EL BIT 4 DEL SPCR (MASTER),
+;
+;******************************************************************************
+
+INISPI:
+        LDA #$53        ;Serial Peripheral Interrupt Disable
+        STA SPCR        ;Serial Peripheral System Enable
+                        ;Master mode
+                        ;SCK line idles in low state
+                        ;     __ 
+                        ;When SS is low, first edge of SCK invokes first data
+                        ;sample.
+                        ;Internal Processor Clock Divided by 32
+
+        RTS
+;-----------------------------------------------------------------------------------------------
+
+TablaBaud:
+	fcb B1200
+	fcb B2400
+	fcb B4800
+	fcb B9600
+tabla:
+	fcb 1,2,4,8,10h,20h,40h,80h
+
+;============================ INTERRUPCIONES  =============================
+timer:
+	bset WATCH_DOG,PORTB
+	bclr WATCH_DOG,PORTB
+	
+	dec CntTimer
+	bne FinTimer
+	inc segundos
+	lda #$2
+	sta CntTimer
+	
+	lda PalSalidas
+	eor FlashSalidas
+	sta PalSalidas
+
+	lda PalEntradas
+	eor FlashEntradas
+	sta PalEntradas
+	jsr EnciendeEntradas
+	
+FinTimer:       
+        bclr 5,TSR
+        jsr pretim
+        rti
+
+
+
+IRQ:
+SPI:
+SCI:
+SWI:
+
+        RTI
+;==============================================================================
+
+
+;------------------- INICIALIZACION DE LOS VECTORES ----------------------
+                               ORG 1FF4H
+
+        FDB SPI
+        FDB SCI
+        FDB TIMER
+        FDB IRQ
+        FDB SWI
+        FDB ENTRY
+
+;------------------------------------------------------------------------------
+
+
+
+
+
+
+
+;-------------------- CONFIGURACION REGISTROS --------------------------------
+			       ORG 1FF0H
+	FDB 0000
+
+                                ORG 1FDFH       'OPTION REGISTER
+
+        FCB 0C8H               ;RAM0 = 1
+                               ;RAM1 = 1
+;-----------------------------------------------------------------------------
+
+        END
